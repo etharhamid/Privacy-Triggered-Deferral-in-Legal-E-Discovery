@@ -1,0 +1,9 @@
+torch>=2.0
+transformers>=4.40
+datasets>=2.18
+scikit-learn>=1.4
+pandas>=2.0
+matplotlib>=3.8
+seaborn>=0.13
+tqdm>=4.66
+anthropic>=0.25

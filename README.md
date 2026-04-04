@@ -16,10 +16,6 @@ $$\text{Defer}(x) = \mathbb{1}[c(x) < \tau_c \;\lor\; r(x) > \tau_r]$$
 
 Privacy-triggered deferral achieves **zero leakage** while being **3.9x cheaper** than the autonomous baseline, because avoiding costly privacy leaks ($50/doc) outweighs the human review overhead ($5/doc).
 
-<p align="center">
-  <img src="plots/figures/fig4_policy_comparison_bar.png" width="80%" alt="Policy comparison"/>
-</p>
-
 ## Architecture
 
 A single multi-task DistilBERT model with two heads:

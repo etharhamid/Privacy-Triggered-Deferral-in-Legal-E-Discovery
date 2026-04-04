@@ -83,15 +83,6 @@ python -m plots.plot_paper
 
 > **Note:** `models/checkpoint.pt` is excluded from the repo due to GitHub's 100 MB limit. Run step 3 to regenerate it.
 
-## Figures
-
-| | |
-|:---:|:---:|
-| ![Fig 1](plots/figures/fig1_confidence_risk_scatter.png) | ![Fig 2](plots/figures/fig2_dataset_distribution.png) |
-| **Fig 1.** Routing quadrants from actual model predictions. The "novel" upper-right region (high confidence, high risk) is only caught by privacy-triggered deferral. | **Fig 2.** Dataset sensitivity distribution and PII type frequencies from the ai4privacy/pii-masking-400k dataset. |
-| ![Fig 5](plots/figures/fig5_cost_breakdown.png) | ![Fig 6](plots/figures/fig6_threshold_sensitivity.png) |
-| **Fig 5.** Cost decomposition: autonomous AI spends 89% on leakage penalties; privacy-triggered spends 98% on human review but is 3.9x cheaper overall. | **Fig 6.** Sweeping τ_r at fixed τ_c=0.85 reveals a "sweet spot" at τ_r=0.5: zero leakage with lowest cost. |
-
 ## Dataset
 
 **Source:** [ai4privacy/pii-masking-400k](https://huggingface.co/datasets/ai4privacy/pii-masking-400k) — synthetic documents with character-level PII annotations across 17 entity types.

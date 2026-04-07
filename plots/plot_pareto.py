@@ -84,8 +84,8 @@ def plot_leakage_vs_automation(df):
         )
 
     ax.set_xlabel("Automation Rate (→ less human work)", fontsize=11)
-    ax.set_ylabel("Leakage Rate (↓ safer)", fontsize=11)
-    ax.set_title("Pareto Frontier: Automation vs. Privacy Leakage", fontsize=13)
+    ax.set_ylabel("True Leakage Rate (↓ safer)", fontsize=11)
+    ax.set_title("Pareto Frontier: Automation vs. True Privacy Leakage", fontsize=13)
     ax.set_xlim(-0.03, 1.08)
     ax.set_ylim(-0.03, 1.05)
     ax.legend(fontsize=10, title_fontsize=8)
@@ -147,6 +147,11 @@ def plot_cost_vs_f1(df):
 def main():
     OUT_DIR.mkdir(exist_ok=True)
     df = pd.read_csv(RESULTS)
+    if "seed" in df.columns:
+        group = ["policy", "tau_c", "tau_r", "C_h"]
+        nums = [c for c in df.columns if c not in group + ["seed"]]
+        agg = df.groupby(group, dropna=False)[nums].agg("mean").reset_index()
+        df = agg
     plot_leakage_vs_automation(df)
     plot_cost_vs_f1(df)
 

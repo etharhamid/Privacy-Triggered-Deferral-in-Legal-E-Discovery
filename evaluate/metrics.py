@@ -42,11 +42,17 @@ def compute_metrics(results: list[dict], C_h=5.0, C_err=2.0, C_leak=50.0) -> dic
     # Automation rate
     automation_rate = len(automated) / n
 
-    # Leakage rate: sensitive docs that were NOT deferred
+    # Sensitive-exposure rate: sensitive docs that were NOT deferred
     sensitive_docs    = [r for r in results if r["is_sensitive"]]
     nonsensitive_docs = [r for r in results if not r["is_sensitive"]]
-    leaked            = [r for r in sensitive_docs if not r["deferred"]]
-    leakage_rate      = len(leaked) / max(len(sensitive_docs), 1)
+    exposed           = [r for r in sensitive_docs if not r["deferred"]]
+    exposure_rate     = len(exposed) / max(len(sensitive_docs), 1)
+
+    # True leakage rate: sensitive docs automated AND redaction missed ≥1 token
+    leaked = [r for r in exposed
+              if sum(1 for ti, pi in zip(r["true_mask"], r["pred_mask"])
+                     if ti == 1 and pi == 0) > 0]
+    leakage_rate = len(leaked) / max(len(sensitive_docs), 1)
 
     # Overall token-level precision / recall / F1
     overall = _token_pr_f1(results)
@@ -66,11 +72,12 @@ def compute_metrics(results: list[dict], C_h=5.0, C_err=2.0, C_leak=50.0) -> dic
             t, p   = r["true_mask"], r["pred_mask"]
             missed = sum(1 for ti, pi in zip(t, p) if ti == 1 and pi == 0)
             error_cost_total += missed * C_err
-            if r["is_sensitive"]:
+            if r["is_sensitive"] and missed > 0:
                 leak_cost_total += r["risk"] * C_leak
 
     return {
         "automation_rate": automation_rate,
+        "exposure_rate":   exposure_rate,
         "leakage_rate":    leakage_rate,
         "system_f1":       overall["f1"],
         "system_precision": overall["precision"],

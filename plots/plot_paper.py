@@ -76,7 +76,17 @@ def load_docs() -> pd.DataFrame:
 def load_results() -> pd.DataFrame:
     if not RESULTS_CSV.exists():
         return pd.DataFrame()
-    return pd.read_csv(RESULTS_CSV)
+    df = pd.read_csv(RESULTS_CSV)
+    if "seed" in df.columns:
+        group = ["policy", "tau_c", "tau_r", "C_h"]
+        nums = [c for c in df.columns if c not in group + ["seed"]]
+        agg = df.groupby(group, dropna=False)[nums].agg(["mean", "std"])
+        agg.columns = [f"{m}_{s}" for m, s in agg.columns]
+        agg = agg.reset_index()
+        for c in nums:
+            agg[c] = agg[f"{c}_mean"]
+        return agg
+    return df
 
 
 def load_predictions() -> list[dict]:
@@ -312,10 +322,11 @@ def fig4_policy_comparison(results: pd.DataFrame):
         print("  [warn] fig4: missing data for some policies")
         return
 
-    RATE_METRICS = ["automation_rate", "leakage_rate", "system_f1"]
+    RATE_METRICS = ["automation_rate", "exposure_rate", "leakage_rate", "system_f1"]
     RATE_LABELS  = {
         "automation_rate": "Automation\nRate",
-        "leakage_rate":    "Leakage\nRate",
+        "exposure_rate":   "Exposure\nRate",
+        "leakage_rate":    "True Leakage\nRate",
         "system_f1":       "System\nF1",
     }
 
@@ -331,14 +342,17 @@ def fig4_policy_comparison(results: pd.DataFrame):
     for i, (policy, row) in enumerate(rows.items()):
         offset = (i - 1) * width
         vals = [row[m] for m in RATE_METRICS]
-        bars = ax.bar(x + offset, vals, width,
+        errs = [row.get(f"{m}_std", 0) or 0 for m in RATE_METRICS]
+        bars = ax.bar(x + offset, vals, width, yerr=errs,
+                      capsize=3, error_kw={"lw": 1.2},
                       label=POLICY_LABELS[policy],
                       color=POLICY_COLORS[policy],
                       alpha=0.88, edgecolor="white", linewidth=0.5)
-        for bar, val in zip(bars, vals):
+        for bar, val, err in zip(bars, vals, errs):
+            label = f"{val:.2f}" if err == 0 else f"{val:.2f}±{err:.2f}"
             ax.text(bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() + 0.015,
-                    f"{val:.2f}", ha="center", va="bottom", fontsize=8.5)
+                    bar.get_height() + err + 0.015,
+                    label, ha="center", va="bottom", fontsize=7.5)
 
     ax.set_xticks(x)
     ax.set_xticklabels([RATE_LABELS[m] for m in RATE_METRICS], fontsize=10)
@@ -425,8 +439,19 @@ def fig5_cost_breakdown(results: pd.DataFrame):
     ax.legend(fontsize=9)
 
     totals = [h + e + l for h, e, l in zip(human_c, error_c, leak_c)]
-    for xi, tot in zip(x, totals):
-        ax.text(xi, tot + 0.15, f"${tot:.2f}", ha="center",
+    total_stds = []
+    for policy in POLICIES:
+        if policy == "autonomous":
+            row = _pick_row(results, policy)
+        elif policy == "confidence_only":
+            row = _pick_row(results, policy, tau_c=REP_TAU_C)
+        else:
+            row = _pick_row(results, policy, tau_c=REP_TAU_C, tau_r=REP_TAU_R)
+        total_stds.append(row.get("expected_cost_std", 0) if row is not None else 0)
+
+    for xi, tot, std in zip(x, totals, total_stds):
+        label = f"${tot:.2f}" if not std else f"${tot:.2f}±{std:.2f}"
+        ax.text(xi, tot + 0.15, label, ha="center",
                 fontsize=9, fontweight="bold")
     _save(fig, "fig5_cost_breakdown.png")
 
@@ -458,18 +483,28 @@ def fig6_threshold_sensitivity(results: pd.DataFrame):
     auto  = grp["automation_rate"].values
     f1    = grp["system_f1"].values
 
+    leak_std = grp["leakage_rate_std"].values if "leakage_rate_std" in grp else np.zeros_like(leak)
+    auto_std = grp["automation_rate_std"].values if "automation_rate_std" in grp else np.zeros_like(auto)
+    f1_std   = grp["system_f1_std"].values if "system_f1_std" in grp else np.zeros_like(f1)
+
     fig, ax1 = plt.subplots(figsize=(7.5, 5))
     ax2 = ax1.twinx()
     ax2.grid(False)
 
     l1, = ax1.plot(tau_r, leak,  color="#e74c3c", lw=2.3,
-                   marker="o", markersize=7, label="Leakage rate", zorder=3)
+                   marker="o", markersize=7, label="True leakage rate", zorder=3)
+    ax1.fill_between(tau_r, leak - leak_std, leak + leak_std,
+                     color="#e74c3c", alpha=0.15)
     l3, = ax1.plot(tau_r, f1,    color="#2ecc71", lw=2.0,
                    marker="D", markersize=6, ls="-.",
                    label="System F1", zorder=3)
+    ax1.fill_between(tau_r, f1 - f1_std, f1 + f1_std,
+                     color="#2ecc71", alpha=0.15)
     l2, = ax2.plot(tau_r, auto,  color="#3498db", lw=2.3,
                    marker="s", markersize=7, ls="--",
                    label="Automation rate", zorder=3)
+    ax2.fill_between(tau_r, auto - auto_std, auto + auto_std,
+                     color="#3498db", alpha=0.15)
 
     # Highlight chosen τ_r
     idx = np.argmin(np.abs(tau_r - REP_TAU_R))
@@ -482,7 +517,7 @@ def fig6_threshold_sensitivity(results: pd.DataFrame):
              f"chosen\nτ_r={tau_r[idx]:.1f}", fontsize=8.5, color="gray")
 
     ax1.set_xlabel("Risk threshold  τ_r", fontsize=11)
-    ax1.set_ylabel("Leakage Rate / F1", fontsize=11)
+    ax1.set_ylabel("True Leakage Rate / F1", fontsize=11)
     ax2.set_ylabel("Automation Rate", fontsize=11, color="#3498db")
     ax2.tick_params(axis="y", labelcolor="#3498db")
     ax1.set_title(

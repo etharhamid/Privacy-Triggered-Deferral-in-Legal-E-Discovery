@@ -1,5 +1,5 @@
-# Model checkpoint (too large for GitHub, regenerate with: python models/train.py)
-models/checkpoint.pt
+# Model checkpoints (too large for GitHub, regenerate with: python models/train.py)
+models/checkpoint*.pt
 
 # Python
 __pycache__/

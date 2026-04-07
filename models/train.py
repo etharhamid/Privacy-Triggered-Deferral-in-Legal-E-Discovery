@@ -1,19 +1,21 @@
 """
 train.py
 Trains the MultiTaskRedactor on documents.jsonl.
-Saves checkpoint to models/checkpoint.pt
+Supports seeded runs for reproducibility across multiple splits.
+Saves checkpoint to models/checkpoint_s{seed}.pt
 """
 
-import json
+import argparse, json, random
 import torch
 import torch.nn as nn
+import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 from tqdm import tqdm
 from models.multitask_model import MultiTaskRedactor, get_tokenizer
 
 DATA_FILE   = Path("data/documents.jsonl")
-CKPT_FILE   = Path("models/checkpoint.pt")
+CKPT_DIR    = Path("models")
 DEVICE      = "cuda" if torch.cuda.is_available() else "cpu"
 EPOCHS      = 3
 BATCH_SIZE  = 16
@@ -32,10 +34,9 @@ class RedactionDataset(Dataset):
     def __getitem__(self, idx):
         rec    = self.records[idx]
         tokens = rec["tokens"]
-        mask   = rec["redaction_mask"]       # per-token binary labels
-        sens   = rec["sensitivity"]          # float 0-1
+        mask   = rec["redaction_mask"]
+        sens   = rec["sensitivity"]
 
-        # Tokenize — word_ids lets us align sub-tokens to original tokens
         enc = self.tokenizer(
             tokens,
             is_split_into_words=True,
@@ -45,7 +46,6 @@ class RedactionDataset(Dataset):
             return_tensors="pt",
         )
 
-        # Align labels: first sub-token of each word gets label; others get -100 (ignored)
         word_ids   = enc.word_ids(batch_index=0)
         ner_labels = []
         seen_words = set()
@@ -66,16 +66,36 @@ class RedactionDataset(Dataset):
         }
 
 
-def train():
-    records = [json.loads(l) for l in open(DATA_FILE)]
-    split   = int(0.8 * len(records))
-    train_r, val_r = records[:split], records[split:]
+def split_data(records: list[dict], seed: int,
+               train_frac: float = 0.64, val_frac: float = 0.16):
+    """Shuffle and split into train / val / test with a given seed."""
+    idx = list(range(len(records)))
+    random.Random(seed).shuffle(idx)
+    n = len(idx)
+    n_train = int(n * train_frac)
+    n_val   = int(n * (train_frac + val_frac))
+    train_r = [records[i] for i in idx[:n_train]]
+    val_r   = [records[i] for i in idx[n_train:n_val]]
+    test_r  = [records[i] for i in idx[n_val:]]
+    return train_r, val_r, test_r
 
-    tokenizer  = get_tokenizer()
-    train_ds   = RedactionDataset(train_r, tokenizer)
-    val_ds     = RedactionDataset(val_r,   tokenizer)
-    train_dl   = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
-    val_dl     = DataLoader(val_ds,   batch_size=BATCH_SIZE)
+
+def train(seed: int = 42):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+
+    records = [json.loads(l) for l in open(DATA_FILE)]
+    train_r, val_r, test_r = split_data(records, seed)
+    print(f"[seed={seed}] Split: {len(train_r)} train / {len(val_r)} val / "
+          f"{len(test_r)} test")
+
+    tokenizer = get_tokenizer()
+    train_ds  = RedactionDataset(train_r, tokenizer)
+    val_ds    = RedactionDataset(val_r,   tokenizer)
+    train_dl  = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,
+                           generator=torch.Generator().manual_seed(seed))
+    val_dl    = DataLoader(val_ds,   batch_size=BATCH_SIZE)
 
     model = MultiTaskRedactor().to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
@@ -86,7 +106,7 @@ def train():
     for epoch in range(EPOCHS):
         model.train()
         total_loss = 0
-        for batch in tqdm(train_dl, desc=f"Epoch {epoch+1}/{EPOCHS}"):
+        for batch in tqdm(train_dl, desc=f"[s{seed}] Epoch {epoch+1}/{EPOCHS}"):
             input_ids      = batch["input_ids"].to(DEVICE)
             attention_mask = batch["attention_mask"].to(DEVICE)
             ner_labels     = batch["ner_labels"].to(DEVICE)
@@ -96,7 +116,7 @@ def train():
 
             loss_ner  = ner_loss_fn(ner_logits.view(-1, 2), ner_labels.view(-1))
             loss_risk = risk_loss_fn(risk_pred, risk_targets)
-            loss      = loss_ner + loss_risk           # equal weighting
+            loss      = loss_ner + loss_risk
 
             optimizer.zero_grad()
             loss.backward()
@@ -105,7 +125,6 @@ def train():
 
         print(f"  Train loss: {total_loss/len(train_dl):.4f}")
 
-        # Quick validation
         model.eval()
         val_loss = 0
         with torch.no_grad():
@@ -119,10 +138,15 @@ def train():
                              + risk_loss_fn(risk_pred, risk_targets)).item()
         print(f"  Val   loss: {val_loss/len(val_dl):.4f}")
 
-    CKPT_FILE.parent.mkdir(exist_ok=True)
-    torch.save(model.state_dict(), CKPT_FILE)
-    print(f"Saved checkpoint → {CKPT_FILE}")
+    ckpt = CKPT_DIR / f"checkpoint_s{seed}.pt"
+    CKPT_DIR.mkdir(exist_ok=True)
+    torch.save(model.state_dict(), ckpt)
+    print(f"Saved checkpoint → {ckpt}")
+    return ckpt
 
 
 if __name__ == "__main__":
-    train()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, default=42)
+    args = parser.parse_args()
+    train(seed=args.seed)

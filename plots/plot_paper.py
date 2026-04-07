@@ -140,8 +140,15 @@ def fig1_confidence_risk_scatter(predictions: list[dict]):
 
     ax.axvline(TAU_C, color="black", lw=1.2, ls="--", alpha=0.6)
     ax.axhline(TAU_R, color="black", lw=1.2, ls="--", alpha=0.6)
-    ax.text(TAU_C + 0.01, 0.02, f"τ_c = {TAU_C}", fontsize=9, alpha=0.7)
-    ax.text(0.02, TAU_R + 0.02, f"τ_r = {TAU_R}", fontsize=9, alpha=0.7)
+
+    pad = 0.03
+    xlims = (max(0, conf.min() - pad), min(1, conf.max() + pad))
+    ylims = (max(0, risk.min() - pad), min(1, risk.max() + pad))
+
+    ax.text(TAU_C + 0.005, ylims[0] + 0.01, f"τ_c = {TAU_C}",
+            fontsize=9, alpha=0.7)
+    ax.text(xlims[0] + 0.005, TAU_R + 0.01, f"τ_r = {TAU_R}",
+            fontsize=9, alpha=0.7)
 
     ax.text(0.87, 0.92, "DEFER\n(novel)", fontsize=8.5, color="#e67e22",
             ha="center", va="center", fontweight="bold",
@@ -157,9 +164,8 @@ def fig1_confidence_risk_scatter(predictions: list[dict]):
     ax.set_xlabel("NER Confidence  c(x)", fontsize=11)
     ax.set_ylabel("Predicted Privacy Risk  r(x)", fontsize=11)
     ax.set_title("Routing Quadrants: Confidence × Privacy Risk", fontsize=13)
-    pad = 0.03
-    ax.set_xlim(max(0, conf.min() - pad), min(1, conf.max() + pad))
-    ax.set_ylim(max(0, risk.min() - pad), min(1, risk.max() + pad))
+    ax.set_xlim(*xlims)
+    ax.set_ylim(*ylims)
     ax.legend(fontsize=8.5, loc="upper left")
     _save(fig, "fig1_confidence_risk_scatter.png")
 

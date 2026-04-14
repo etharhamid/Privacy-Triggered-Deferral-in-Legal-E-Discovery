@@ -35,28 +35,27 @@ Sensitivity labels are generated offline by a local **Qwen-2.5 7B** LLM; only Di
 ```
 ediscovery-l2d/
 ├── data/
-│   ├── prepare_data.py              # Download dataset, LLM sensitivity annotation
-│   ├── documents.jsonl              # 500 processed documents with sensitivity scores
-│   └── llm_sensitivity_cache.json   # Cached LLM sensitivity ratings
+│   ├── prepare_data.py                                  # Download dataset, LLM sensitivity annotation
+│   ├── documents.jsonl                                  # 500 processed documents with sensitivity scores
+│   └── llm_sensitivity_cache.json                       # Cached LLM sensitivity ratings
 ├── models/
-│   ├── multitask_model.py           # MultiTaskRedactor model definition
-│   └── train.py                     # Multi-seed training (joint NER + risk loss)
+│   ├── multitask_model.py                               # MultiTaskRedactor model definition
+│   └── train.py                                         # Multi-seed training (joint NER + risk loss)
 ├── pipeline/
-│   ├── redactor.py                  # Single-document inference
-│   └── router.py                    # Three routing policies
+│   ├── redactor.py                                      # Single-document inference
+│   └── router.py                                        # Three routing policies
 ├── evaluate/
-│   └── metrics.py                   # Automation rate, leakage, exposure, F1, cost
+│   └── metrics.py                                       # Automation rate, leakage, exposure, F1, cost
 ├── experiments/
-│   ├── run_experiment.py            # Full parameter sweep across seeds
-│   ├── results.csv                  # Per-seed experiment results
-│   ├── results_aggregated.csv       # Aggregated mean ± std results
-│   └── predictions.json             # Per-document model predictions
+│   ├── run_experiment.py                                # Full parameter sweep across seeds
+│   ├── results.csv                                      # Per-seed experiment results
+│   ├── results_aggregated.csv                           # Aggregated mean ± std results
+│   └── predictions.json                                 # Per-document model predictions
 ├── plots/
-│   ├── plot_pareto.py               # Pareto frontier plots
-│   ├── plot_paper.py                # Publication figures (Figs 1–6)
-│   └── figures/                     # Generated figures
-├── latex.txt                        # LaTeX source (NeurIPS workshop format)
-├── presentation.md                  # 7-minute presentation slides
+│   ├── plot_pareto.py                                   # Pareto frontier plots
+│   ├── plot_paper.py                                    # Publication figures (Figs 1–6)
+│   └── figures/                                         # Generated figures
+├── Privacy-Triggered-Deferral-in-Legal-E-Discovery.pdf  # NeurIPS workshop format paper
 └── requirements.txt
 ```
 
